@@ -110,26 +110,24 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Real-Time Listener Logic ---
+  let allAccounts = [];
+
   function startLiveListeners() {
     // 📄 Live Documents
     if (!unsubDocs) {
       unsubDocs = onSnapshot(collection(db, "documents"), (snapshot) => {
         const listEl = document.getElementById('documents-list');
         if (!listEl) return;
-        
         if (snapshot.empty) {
           listEl.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-slate-500">No documents found.</td></tr>`;
           return;
         }
-
-        listEl.innerHTML = '';
-        snapshot.forEach((docSnap) => {
+        listEl.innerHTML = snapshot.docs.map(docSnap => {
           const data = docSnap.data();
           const docId = docSnap.id;
-          let iconColor = data.name? (data.name.endsWith('.pdf') ? 'text-red-500' : (data.name.endsWith('.xlsx') ? 'text-emerald-500' : 'text-blue-500')) : 'text-slate-500';
+          let iconColor = data.name?.endsWith('.pdf') ? 'text-red-500' : (data.name?.endsWith('.xlsx') ? 'text-emerald-500' : 'text-blue-500');
           let statusCls = data.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800';
-
-          listEl.innerHTML += `
+          return `
             <tr class="bg-white hover:bg-slate-50 transition-colors animate-fade-in">
               <td class="px-6 py-4 font-medium text-slate-900 flex items-center gap-3">
                 <svg class="w-6 h-6 ${iconColor}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
@@ -145,9 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
               </td>
             </tr>`;
-        });
-        
-        // Re-bind delete actions
+        }).join('');
         listEl.querySelectorAll('.btn-delete-doc').forEach(btn => btn.onclick = () => deleteDocument(btn.dataset.docid, btn.dataset.name));
       });
     }
@@ -173,14 +169,39 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // 👥 Live Accounts
+    // 👥 Live Accounts (Master Listener)
     if (!unsubAccounts) {
       unsubAccounts = onSnapshot(collection(db, "accounts"), (snapshot) => {
-        const accounts = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        renderAccountsTable(accounts);
+        allAccounts = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        filterAndRenderAccounts();
       });
     }
   }
+
+  function filterAndRenderAccounts() {
+    const searchVal = (document.getElementById('accounts-search')?.value || '').toLowerCase();
+    const roleVal = document.getElementById('accounts-filter-role')?.value || 'All';
+    const countInfo = document.getElementById('accounts-count-info');
+
+    let filtered = allAccounts.filter(a => {
+       const raw = `${a.name} ${a.email} ${a.org}`.toLowerCase();
+       const matchesSearch = raw.includes(searchVal);
+       const matchesRole = roleVal === 'All' || a.role === roleVal;
+       return matchesSearch && matchesRole;
+    });
+
+    renderAccountsTable(filtered);
+    if (countInfo) {
+      countInfo.innerText = `Showing ${filtered.length} of ${allAccounts.length} accounts`;
+    }
+  }
+
+  // Hook up Filter/Search inputs
+  const searchInput = document.getElementById('accounts-search');
+  const roleFilter = document.getElementById('accounts-filter-role');
+
+  if (searchInput) searchInput.addEventListener('input', () => filterAndRenderAccounts());
+  if (roleFilter) roleFilter.addEventListener('change', () => filterAndRenderAccounts());
 
   // --- Router & Navigation ---
   function switchView(target) {

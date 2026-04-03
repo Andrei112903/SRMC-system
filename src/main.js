@@ -303,6 +303,61 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (logoutBtn) logoutBtn.addEventListener('click', () => signOut(auth).then(()=>window.location.reload()));
 
+  // --- Invite User Modal & Logic ---
+  const inviteModal = document.getElementById('modal-invite-user');
+  const inviteBtn = document.getElementById('btn-invite-user');
+  const inviteForm = document.getElementById('form-invite-user');
+
+  if (inviteBtn && inviteModal) {
+    inviteBtn.onclick = () => {
+      inviteForm.reset();
+      document.getElementById('invite-error').classList.add('hidden');
+      inviteModal.classList.remove('hidden');
+    };
+  }
+
+  document.querySelectorAll('#btn-close-invite-modal, #btn-cancel-invite').forEach(b => {
+    b.onclick = () => inviteModal.classList.add('hidden');
+  });
+
+  if (inviteForm) {
+    inviteForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('invite-name').value;
+      const email = document.getElementById('invite-email').value;
+      const org = document.getElementById('invite-org').value;
+      const role = document.getElementById('invite-role').value;
+      const pass = document.getElementById('invite-password').value;
+      const errEl = document.getElementById('invite-error');
+      const submitBtn = document.getElementById('btn-submit-invite');
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = "Inviting...";
+      
+      try {
+        // 1. Create the user in Auth using secondary auth (prevents logging out the admin)
+        await createUserWithEmailAndPassword(authSecondary, email, pass);
+        
+        // 2. Create the account record in Firestore
+        await addDoc(collection(db, "accounts"), {
+          name, email, org, role,
+          date: new Date().toLocaleDateString(),
+          initials: name.split(' ').map(n=>n[0]).join('').toUpperCase().substring(0,2)
+        });
+
+        inviteModal.classList.add('hidden');
+        showToast(`User ${name} invited!`);
+      } catch (err) {
+        console.error("Invite error:", err);
+        errEl.innerText = err.message || "Failed to invite user.";
+        errEl.classList.remove('hidden');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = "Invite User";
+      }
+    };
+  }
+
   // --- Modal Bindings ---
   function bindAccountListeners(list) {
     list.querySelectorAll('.btn-view-details').forEach(btn => btn.onclick = () => {

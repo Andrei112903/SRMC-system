@@ -301,6 +301,58 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // --- Add Session Modal & Logic ---
+  const sessionModal = document.getElementById('modal-add-session');
+  const openSessionBtn = document.getElementById('btn-open-session-modal');
+  const sessionForm = document.getElementById('form-add-session');
+
+  if (openSessionBtn && sessionModal) {
+    openSessionBtn.onclick = () => {
+      sessionForm.reset();
+      document.getElementById('session-error').classList.add('hidden');
+      sessionModal.classList.remove('hidden');
+    };
+  }
+
+  document.querySelectorAll('#btn-close-session-modal, #btn-cancel-session').forEach(b => {
+    b.onclick = () => sessionModal.classList.add('hidden');
+  });
+
+  if (sessionForm) {
+    sessionForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('session-title').value;
+      const speaker = document.getElementById('session-speaker').value;
+      const date = document.getElementById('session-date').value;
+      const status = document.getElementById('session-status').value;
+      const start = document.getElementById('session-start').value;
+      const end = document.getElementById('session-end').value;
+      const location = document.getElementById('session-location').value;
+      const errEl = document.getElementById('session-error');
+      const submitBtn = document.getElementById('btn-submit-session');
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = "Saving...";
+
+      try {
+        await addDoc(collection(db, "schedule_events"), {
+          title, speaker, date, status, location,
+          time: `${start} - ${end}`
+        });
+
+        sessionModal.classList.add('hidden');
+        showToast(`Session "${title}" added!`);
+      } catch (err) {
+        console.error("Session error:", err);
+        errEl.innerText = "Failed to save session.";
+        errEl.classList.remove('hidden');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = "Save Session";
+      }
+    };
+  }
+
   if (logoutBtn) logoutBtn.addEventListener('click', () => signOut(auth).then(()=>window.location.reload()));
 
   // --- Invite User Modal & Logic ---

@@ -150,63 +150,105 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  const navLinks = document.querySelectorAll('.nav-link');
-  const viewSections = document.querySelectorAll('.view-section');
-
+  // Core view switching logic
   function switchView(target) {
-    if (!target) return;
-    
-    // Toggle Views (Safely if they exist)
-    viewSections.forEach(section => {
+    if (!target) target = 'home';
+    console.log("[Router] Switching view to:", target);
+
+    const sections = document.querySelectorAll('.view-section');
+    const links = document.querySelectorAll('.nav-link');
+
+    if (sections.length === 0) {
+      console.warn("[Router] No view sections found in DOM.");
+      return;
+    }
+
+    let foundView = false;
+    sections.forEach(section => {
+      // Show matching view, hide others
       if (section.id === `view-${target}`) {
         section.classList.remove('hidden');
         section.classList.add('block');
+        foundView = true;
       } else {
         section.classList.add('hidden');
         section.classList.remove('block');
       }
     });
 
-    // Update active states on Links
-    navLinks.forEach(link => {
+    // Final fallback: if target view not found, force show home view
+    if (!foundView && target !== 'home') {
+      console.warn(`[Router] View 'view-${target}' missing, falling back to 'home'`);
+      return switchView('home');
+    }
+
+    // Update Sidebar/Nav Links active states
+    links.forEach(link => {
       const isDesktop = link.closest('aside') !== null;
-      const targetHref = link.getAttribute('href');
-      if (!targetHref) return;
+      const href = link.getAttribute('href') || '';
       
-      const isActive = targetHref.includes(target) || (target === 'home' && targetHref.includes('index.html'));
+      // Smart matching for Home vs Category pages
+      const isHome = target === 'home' && (href.includes('index.html') || href === '/' || href === './');
+      const isCategory = target !== 'home' && href.toLowerCase().includes(target.toLowerCase());
+      const isMatch = isHome || isCategory;
 
       if (isDesktop) {
-        if (isActive) {
+        if (isMatch) {
           link.classList.add('bg-primary-900', 'text-white');
           link.classList.remove('text-slate-300', 'hover:bg-slate-700', 'hover:text-white');
         } else {
-          link.classList.add('text-slate-300', 'hover:bg-slate-700', 'hover:text-white');
           link.classList.remove('bg-primary-900', 'text-white');
+          link.classList.add('text-slate-300', 'hover:bg-slate-700', 'hover:text-white');
         }
       } else {
-        if (isActive) {
+        if (isMatch) {
           link.classList.add('text-primary-600');
           link.classList.remove('text-slate-400', 'hover:text-primary-500');
         } else {
-          link.classList.add('text-slate-400', 'hover:text-primary-500');
           link.classList.remove('text-primary-600');
+          link.classList.add('text-slate-400', 'hover:text-primary-500');
         }
       }
     });
   }
 
-  // MPA Route Handling
+  // Intercept Navigation Clicks
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('.nav-link');
+    if (!link) return;
+    
+    const href = link.getAttribute('href');
+    // Only intercept local dashboard links
+    if (href && (href.endsWith('.html') || href === '/' || href === 'index.html')) {
+      e.preventDefault();
+      
+      let target = 'home';
+      if (href.includes('documents')) target = 'documents';
+      else if (href.includes('schedule')) target = 'schedule';
+      else if (href.includes('accounts')) target = 'accounts';
+      
+      history.pushState(null, '', href);
+      switchView(target);
+    }
+  });
+
+  window.addEventListener('popstate', initializeRoute);
+
   function initializeRoute() {
-    const pathStr = window.location.pathname.replace(/^\/+/, '').split('/')[0] || 'index.html';
+    const path = window.location.pathname.toLowerCase();
+    console.log("[Router] Current pathname:", path);
+
+    let target = 'home';
+    if (path.includes('documents')) target = 'documents';
+    else if (path.includes('schedule')) target = 'schedule';
+    else if (path.includes('accounts')) target = 'accounts';
+    else if (path.includes('login')) target = 'login';
     
-    let targetView = 'home';
-    if (pathStr.includes('documents')) targetView = 'documents';
-    if (pathStr.includes('schedule')) targetView = 'schedule';
-    if (pathStr.includes('accounts')) targetView = 'accounts';
-    if (pathStr.includes('login')) targetView = 'login';
-    
-    switchView(targetView);
+    switchView(target);
   }
+
+  // Immediate check to fix refresh white-screen
+  initializeRoute();
 
   // Native HTML <a> tags will now handle all routing natively. No Javascript click interception is required for MPA
 

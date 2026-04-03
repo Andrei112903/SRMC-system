@@ -11,6 +11,23 @@
   </head>
   <body class="bg-slate-50 text-slate-900 font-sans antialiased h-screen overflow-hidden">
     
+    <!-- SMRC LOADING SCREEN (Premium Reveal) -->
+    <div id="app-loading" class="fixed inset-0 z-[200] bg-slate-900 flex flex-col items-center justify-center transition-all duration-700 ease-in-out">
+      <div class="relative mb-6">
+        <!-- Logo Spinner Effect -->
+        <div class="w-24 h-24 border-4 border-primary-500/20 border-t-primary-500 rounded-full animate-spin"></div>
+        <div class="absolute inset-0 flex items-center justify-center">
+          <span class="text-white font-black text-2xl tracking-tighter italic">SMRC</span>
+        </div>
+      </div>
+      <p class="text-slate-400 font-medium tracking-widest text-xs uppercase animate-pulse">Initializing System...</p>
+      
+      <!-- Loading Progress bar (Dummy for aesthetics) -->
+      <div class="mt-8 w-48 h-1 bg-slate-800 rounded-full overflow-hidden">
+        <div class="h-full bg-primary-500 animate-loading-progress shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
+      </div>
+    </div>
+
     <!-- DASHBOARD WRAPPER -->
     <div id="app-dashboard" class="flex h-full w-full flex overflow-hidden">
       <!-- DESKTOP SIDEBAR (Hidden on Mobile) -->

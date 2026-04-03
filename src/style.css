@@ -2,7 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Additional custom styling here if needed */
-body {
-  @apply bg-slate-50 text-slate-900;
+@layer utilities {
+  .animate-loading-progress {
+    animation: loading-progress 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  @keyframes loading-progress {
+    0% { width: 0%; transform: translateX(-100%); }
+    50% { width: 70%; transform: translateX(0%); }
+    100% { width: 100%; transform: translateX(100%); }
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
 }

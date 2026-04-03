@@ -7,9 +7,23 @@ import { signInWithEmailAndPassword, onAuthStateChanged, signOut, createUserWith
 // (Global unsubscription functions to clean up if needed)
 let unsubDocs, unsubStats, unsubSchedule, unsubAccounts;
 
-console.log("SMRC System Main Module Loaded.");
+// 🚀 SYSTEM VERSION MANAGER (Auto-Cache Clear)
+const APP_VERSION = '1.1.0'; // Incremental this whenever you make major changes
+
+console.log(`SMRC System Version: ${APP_VERSION}`);
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Check for version updates to clear stale caches
+  const savedVersion = localStorage.getItem('smrc_version');
+  if (savedVersion && savedVersion !== APP_VERSION) {
+    console.warn("New version detected! Clearing cache and reloading...");
+    localStorage.clear(); 
+    localStorage.setItem('smrc_version', APP_VERSION);
+    window.location.reload(true); // Force reload from server
+    return;
+  }
+  localStorage.setItem('smrc_version', APP_VERSION);
+
   const appLoading = document.getElementById('app-loading');
   const appDashboard = document.getElementById('app-dashboard');
   const loginForm = document.getElementById('login-form');
@@ -371,6 +385,33 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('#btn-close-invite-modal, #btn-cancel-invite').forEach(b => {
     b.onclick = () => inviteModal.classList.add('hidden');
   });
+
+  // --- Home Quick Action Listeners ---
+  const qaExport = document.getElementById('qa-export-reports');
+  const qaNewDelegate = document.getElementById('qa-new-delegate');
+  const qaAddSession = document.getElementById('qa-add-session');
+  const qaSettings = document.getElementById('qa-settings');
+
+  if (qaExport) qaExport.onclick = () => showToast('Preparing system reports...', 'info');
+  if (qaNewDelegate) {
+    qaNewDelegate.onclick = () => {
+      if (inviteModal) {
+         inviteForm.reset();
+         document.getElementById('invite-error').classList.add('hidden');
+         inviteModal.classList.remove('hidden');
+      }
+    };
+  }
+  if (qaAddSession) {
+    qaAddSession.onclick = () => {
+      if (sessionModal) {
+         sessionForm.reset();
+         document.getElementById('session-error').classList.add('hidden');
+         sessionModal.classList.remove('hidden');
+      }
+    };
+  }
+  if (qaSettings) qaSettings.onclick = () => showToast('Opening system settings...', 'info');
 
   if (inviteForm) {
     inviteForm.onsubmit = async (e) => {

@@ -38,7 +38,7 @@
       </nav>
       <div class="p-4 border-t border-slate-700">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center text-white font-bold">JA</div>
+          <div id="sidebar-avatar" class="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center text-white font-bold">JA</div>
           <div>
               <p class="text-sm font-medium text-white" id="sidebar-user-name">John Andrei</p>
               <p class="text-xs text-slate-400" id="sidebar-user-role">Administrator</p>
@@ -268,7 +268,7 @@
               <p class="mt-1 text-slate-500">Manage user roles and permissions.</p>
             </div>
             <div>
-              <button class="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 sm:py-2.5 rounded-lg shadow-sm font-medium transition-colors">
+              <button id="btn-invite-user" class="hidden w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 sm:py-2.5 rounded-lg shadow-sm font-medium transition-colors">
                 <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
                 Invite User
               </button>
@@ -283,7 +283,7 @@
                 <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                   <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 </div>
-                <input type="search" class="block w-full p-2.5 pl-10 text-sm text-slate-900 border border-slate-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500" placeholder="Search by name or organization...">
+                <input id="accounts-search" type="search" class="block w-full p-2.5 pl-10 text-sm text-slate-900 border border-slate-300 rounded-lg bg-white focus:ring-blue-500 focus:border-blue-500" placeholder="Search by name, email, or organization...">
               </div>
               <div class="flex items-center gap-2">
                 <button class="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-colors">
@@ -382,7 +382,7 @@
 
             <!-- Pagination Footer -->
             <div class="px-6 py-4 border-t border-slate-200 bg-white flex items-center justify-between">
-              <span class="text-sm text-slate-500">Showing <span class="font-medium text-slate-900">1</span> to <span class="font-medium text-slate-900">3</span> of <span class="font-medium text-slate-900">145</span> results</span>
+              <span id="accounts-count-info" class="text-sm text-slate-500">Loading...</span>
               <div class="flex gap-2">
                 <button class="px-3 py-1 border border-slate-300 rounded text-sm font-medium text-slate-600 disabled:opacity-50" disabled>Prev</button>
                 <button class="px-3 py-1 border border-slate-300 rounded text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">Next</button>
@@ -467,6 +467,52 @@
           <div class="pt-4 mt-6 border-t border-slate-100 flex justify-end">
              <button type="button" id="btn-cancel-session" class="px-5 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors mr-3">Cancel</button>
              <button type="submit" id="btn-submit-session" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors">Save Session</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Invite User Modal -->
+    <div id="modal-invite-user" class="hidden fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center px-4 animate-fade-in">
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+          <h3 class="text-xl font-bold text-slate-900 tracking-tight">Invite New User</h3>
+          <button id="btn-close-invite-modal" class="text-slate-400 hover:text-slate-600 transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+        <form id="form-invite-user" class="p-6 space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+            <input type="text" id="invite-name" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 text-slate-900" placeholder="e.g. Jane Doe">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
+            <input type="email" id="invite-email" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 text-slate-900" placeholder="e.g. jane@example.com">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Organization</label>
+            <input type="text" id="invite-org" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 text-slate-900" placeholder="e.g. Health Center">
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Role</label>
+              <select id="invite-role" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900 text-sm">
+                <option value="Delegate">Delegate</option>
+                <option value="Speaker">Speaker</option>
+                <option value="Staff">Staff</option>
+                <option value="Administrator">Administrator</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+              <input type="password" id="invite-password" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 text-slate-900 text-sm" placeholder="Set password">
+            </div>
+          </div>
+          <p id="invite-error" class="text-sm text-red-500 hidden"></p>
+          <div class="pt-4 mt-6 border-t border-slate-100 flex justify-end">
+             <button type="button" id="btn-cancel-invite" class="px-5 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors mr-3">Cancel</button>
+             <button type="submit" id="btn-submit-invite" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors">Invite User</button>
           </div>
         </form>
       </div>

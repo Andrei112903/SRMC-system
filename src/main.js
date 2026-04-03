@@ -1,8 +1,8 @@
 import './style.css';
-import { db, auth } from './firebase.js';
+import { db, auth, authSecondary } from './firebase.js';
 import { seedDatabase } from './seed.js';
-import { collection, getDocs, query, where, addDoc } from "firebase/firestore";
-import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
+import { collection, getDocs, query, where, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import { signInWithEmailAndPassword, onAuthStateChanged, signOut, createUserWithEmailAndPassword } from "firebase/auth";
 
 // Force clean legacy Service Workers to break faulty MPA caching
 if ('serviceWorker' in navigator) {
@@ -75,21 +75,36 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update Sidebar
         const sidebarName = document.getElementById('sidebar-user-name');
         const sidebarRole = document.getElementById('sidebar-user-role');
+        const sidebarAvatar = document.getElementById('sidebar-avatar');
         if(sidebarName) sidebarName.innerText = userName;
         if(sidebarRole) sidebarRole.innerText = userRole;
+        if(sidebarAvatar) {
+          const initials = userName.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+          sidebarAvatar.innerText = initials;
+        }
 
         // Handle RBAC View Permissions
         const accountsTabDesktop = document.getElementById('nav-accounts-tab');
         const accountsTabMobile = document.getElementById('mobile-nav-accounts');
         
-        if (userRole === 'Administrator' || userRole === 'Staff') {
-          if(accountsTabDesktop) accountsTabDesktop.classList.remove('hidden');
-          if(accountsTabDesktop) accountsTabDesktop.classList.add('flex');
-          if(accountsTabMobile) accountsTabMobile.classList.remove('hidden');
-          if(accountsTabMobile) accountsTabMobile.classList.add('flex');
-        } else {
-          if(accountsTabDesktop) { accountsTabDesktop.classList.add('hidden'); accountsTabDesktop.classList.remove('flex'); }
-          if(accountsTabMobile) { accountsTabMobile.classList.add('hidden'); accountsTabMobile.classList.remove('flex'); }
+        // Accounts tab is now visible to all users
+        if(accountsTabDesktop) {
+          accountsTabDesktop.classList.remove('hidden');
+          accountsTabDesktop.classList.add('flex');
+        }
+        if(accountsTabMobile) {
+          accountsTabMobile.classList.remove('hidden');
+          accountsTabMobile.classList.add('flex');
+        }
+
+        // --- INVITE USER RBAC ---
+        const inviteBtn = document.getElementById('btn-invite-user');
+        if (inviteBtn) {
+          if (userRole === 'Administrator' || userRole === 'Staff') {
+            inviteBtn.classList.remove('hidden');
+          } else {
+            inviteBtn.classList.add('hidden');
+          }
         }
       } catch (e) {
          console.warn("RBAC processing bypassed", e);
@@ -100,6 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
       loadDocuments();
       loadStats();
       loadSchedule();
+      loadAccounts();
       
     } else {
       console.log("No user logged in.");
@@ -367,23 +383,16 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const querySnapshot = await getDocs(collection(db, "stats"));
       if (!querySnapshot.empty) {
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          let elementId = null;
-          
-          if (data.title === "Delegates") elementId = "stat-delegates";
-          else if (data.title === "Sessions") elementId = "stat-sessions";
-          else if (data.title === "Pending") elementId = "stat-approvals";
-          else if (data.title === "Processed") elementId = "stat-documents";
-
-          if (elementId) {
-            const el = document.getElementById(elementId);
-            if (el) {
-              // format number with commas
-              el.innerText = data.value.toLocaleString();
-            }
-          }
-        });
+        // Stats are stored as a flat object on the first document
+        const data = querySnapshot.docs[0].data();
+        const delegates = document.getElementById('stat-delegates');
+        const sessions = document.getElementById('stat-sessions');
+        const approvals = document.getElementById('stat-approvals');
+        const docsCount = document.getElementById('stat-documents');
+        if (delegates && data.delegates != null) delegates.innerText = Number(data.delegates).toLocaleString();
+        if (sessions && data.activeSessions != null) sessions.innerText = Number(data.activeSessions).toLocaleString();
+        if (approvals && data.pendingApprovals != null) approvals.innerText = Number(data.pendingApprovals).toLocaleString();
+        if (docsCount && data.docsProcessed != null) docsCount.innerText = Number(data.docsProcessed).toLocaleString();
       }
     } catch (e) {
       console.error("Error fetching stats: ", e);
@@ -454,6 +463,163 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Invite User Modal Logic
+  const inviteModal = document.getElementById('modal-invite-user');
+  const closeInviteModalBtn = document.getElementById('btn-close-invite-modal');
+  const cancelInviteBtn = document.getElementById('btn-cancel-invite');
+  const formInviteUser = document.getElementById('form-invite-user');
+  const inviteError = document.getElementById('invite-error');
+  const submitInviteBtn = document.getElementById('btn-submit-invite');
+
+  function closeInviteModal() {
+    if (inviteModal) {
+      inviteModal.classList.add('hidden');
+      if (formInviteUser) formInviteUser.reset();
+      if (inviteError) inviteError.classList.add('hidden');
+    }
+  }
+
+  if (inviteModal) {
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('#btn-invite-user')) {
+        inviteModal.classList.remove('hidden');
+      }
+    });
+
+    if (closeInviteModalBtn) closeInviteModalBtn.addEventListener('click', closeInviteModal);
+    if (cancelInviteBtn) cancelInviteBtn.addEventListener('click', closeInviteModal);
+
+    if (formInviteUser) {
+      formInviteUser.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const name     = document.getElementById('invite-name').value.trim();
+        const email    = document.getElementById('invite-email').value.trim();
+        const org      = document.getElementById('invite-org').value.trim();
+        const role     = document.getElementById('invite-role').value;
+        const password = document.getElementById('invite-password').value;
+
+        if (password.length < 6) {
+          if (inviteError) {
+            inviteError.innerText = 'Password must be at least 6 characters.';
+            inviteError.classList.remove('hidden');
+          }
+          return;
+        }
+
+        if (submitInviteBtn) {
+          submitInviteBtn.disabled = true;
+          submitInviteBtn.innerText = 'Creating account...';
+        }
+        if (inviteError) inviteError.classList.add('hidden');
+
+        try {
+          // Step 1: Create Firebase Auth account using the SECONDARY auth instance
+          // so the Admin's current session is NOT displaced.
+          const userCredential = await createUserWithEmailAndPassword(authSecondary, email, password);
+          const uid = userCredential.user.uid;
+          // Sign out from secondary so it stays clean
+          await signOut(authSecondary);
+
+          // Step 2: Save profile to Firestore
+          const initials = name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().substring(0, 2);
+          await addDoc(collection(db, 'accounts'), {
+            uid,
+            name,
+            email,
+            org,
+            role,
+            initials,
+            date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          });
+
+          closeInviteModal();
+          loadAccounts();
+          showToast(`✅ ${name} invited successfully!`, 'success');
+        } catch (error) {
+          console.error('Error creating account:', error);
+          let msg = 'Failed to create account. Please try again.';
+          if (error.code === 'auth/email-already-in-use') msg = 'This email is already registered.';
+          else if (error.code === 'auth/invalid-email')   msg = 'Please enter a valid email address.';
+          if (inviteError) {
+            inviteError.innerText = msg;
+            inviteError.classList.remove('hidden');
+          }
+        } finally {
+          if (submitInviteBtn) {
+            submitInviteBtn.disabled = false;
+            submitInviteBtn.innerText = 'Invite User';
+          }
+        }
+      });
+    }
+  }
+
+  // --- Toast Notification System ---
+  function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    const bgColor = type === 'success' ? 'bg-emerald-600' : 'bg-red-600';
+    toast.className = `fixed bottom-24 md:bottom-6 right-6 z-[200] ${bgColor} text-white px-5 py-3 rounded-xl shadow-xl text-sm font-medium animate-fade-in flex items-center gap-2`;
+    toast.innerText = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3500);
+  }
+
+  // --- Edit Role Modal ---
+  const editRoleModal = document.createElement('div');
+  editRoleModal.id = 'modal-edit-role';
+  editRoleModal.className = 'hidden fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center px-4';
+  editRoleModal.innerHTML = `
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+        <h3 class="text-lg font-bold text-slate-900">Edit Role</h3>
+        <button id="btn-close-edit-role" class="text-slate-400 hover:text-slate-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="p-6 space-y-4">
+        <p id="edit-role-username" class="text-slate-600 text-sm font-medium"></p>
+        <input type="hidden" id="edit-role-docid">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">New Role</label>
+          <select id="edit-role-select" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-slate-900">
+            <option value="Delegate">Delegate</option>
+            <option value="Speaker">Speaker</option>
+            <option value="Staff">Staff</option>
+            <option value="Administrator">Administrator</option>
+          </select>
+        </div>
+        <div class="pt-2 flex justify-end gap-3">
+          <button id="btn-cancel-edit-role" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-800">Cancel</button>
+          <button id="btn-save-edit-role" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">Save</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(editRoleModal);
+
+  document.getElementById('btn-close-edit-role').addEventListener('click', () => editRoleModal.classList.add('hidden'));
+  document.getElementById('btn-cancel-edit-role').addEventListener('click', () => editRoleModal.classList.add('hidden'));
+  document.getElementById('btn-save-edit-role').addEventListener('click', async () => {
+    const docId = document.getElementById('edit-role-docid').value;
+    const newRole = document.getElementById('edit-role-select').value;
+    const saveBtn = document.getElementById('btn-save-edit-role');
+    saveBtn.disabled = true;
+    saveBtn.innerText = 'Saving...';
+    try {
+      await updateDoc(doc(db, 'accounts', docId), { role: newRole });
+      editRoleModal.classList.add('hidden');
+      loadAccounts();
+      showToast('Role updated successfully!', 'success');
+    } catch(err) {
+      console.error('Error updating role:', err);
+      showToast('Failed to update role.', 'error');
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.innerText = 'Save';
+    }
+  });
+
   // Fetch and Render Schedule from Firebase
   async function loadSchedule() {
     const tabsContainer = document.getElementById('schedule-tabs-container');
@@ -469,7 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Group events by date
+      // Group events by date, then sort each day's sessions by start time
       const eventsByDate = {};
       querySnapshot.forEach((doc) => {
         const data = doc.data();
@@ -477,6 +643,21 @@ document.addEventListener('DOMContentLoaded', () => {
           eventsByDate[data.date] = [];
         }
         eventsByDate[data.date].push(data);
+      });
+
+      // Sort each day's events chronologically (08:00 AM < 10:00 AM < 01:00 PM)
+      const toMins = t => {
+        if (!t) return 0;
+        const parts = t.trim().split(' ');
+        const period = parts[1];
+        const [h, m] = parts[0].split(':').map(Number);
+        let hours = h;
+        if (period === 'PM' && h !== 12) hours += 12;
+        if (period === 'AM' && h === 12) hours = 0;
+        return hours * 60 + m;
+      };
+      Object.keys(eventsByDate).forEach(d => {
+        eventsByDate[d].sort((a, b) => toMins(a.time) - toMins(b.time));
       });
 
       // Sort dates
@@ -553,12 +734,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                     ${data.location}
                   </div>
-                  ${data.status !== 'Finished' ? `
-                  <button class="flex items-center gap-1.5 text-blue-600 hover:text-blue-800 font-medium">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                    Add to Calendar
-                  </button>
-                  ` : ''}
                 </div>
               </div>
             </div>
@@ -601,6 +776,121 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error("Error fetching schedule: ", e);
       contentContainer.innerHTML = '<div class="text-center py-8 text-red-500">Failed to load schedule.</div>';
     }
+  }
+
+  // Fetch and Render Accounts from Firebase
+  let allAccountsData = []; // cache for search
+
+  async function loadAccounts() {
+    const listEl = document.getElementById('accounts-list');
+    if (!listEl) return;
+
+    listEl.innerHTML = `<tr><td colspan="5" class="text-center py-10 text-slate-500"><div class="flex items-center justify-center gap-2"><svg class="animate-spin w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Loading accounts...</div></td></tr>`;
+
+    try {
+      const querySnapshot = await getDocs(collection(db, 'accounts'));
+      allAccountsData = [];
+      querySnapshot.forEach(d => allAccountsData.push({ id: d.id, ...d.data() }));
+      renderAccountsTable(allAccountsData);
+
+      // Wire up search using the dedicated ID
+      const searchInput = document.getElementById('accounts-search');
+      if (searchInput) {
+        searchInput.oninput = () => {
+          const q = searchInput.value.toLowerCase();
+          const filtered = allAccountsData.filter(a =>
+            (a.name  || '').toLowerCase().includes(q) ||
+            (a.email || '').toLowerCase().includes(q) ||
+            (a.org   || '').toLowerCase().includes(q) ||
+            (a.role  || '').toLowerCase().includes(q)
+          );
+          renderAccountsTable(filtered);
+        };
+      }
+    } catch (e) {
+      console.error('Error fetching accounts:', e);
+      listEl.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-red-500">Failed to load accounts. (${e.code || e.message})</td></tr>`;
+    }
+  }
+
+  function renderAccountsTable(accounts) {
+    const listEl = document.getElementById('accounts-list');
+    if (!listEl) return;
+
+    if (accounts.length === 0) {
+      listEl.innerHTML = `<tr><td colspan="5" class="text-center py-10 text-slate-500">No accounts match your search.</td></tr>`;
+      return;
+    }
+
+    const avatarColors = {
+      'Administrator': 'bg-red-100 text-red-700',
+      'Staff': 'bg-emerald-100 text-emerald-700',
+      'Speaker': 'bg-indigo-100 text-indigo-700',
+      'Delegate': 'bg-amber-100 text-amber-700',
+    };
+    const badgeColors = {
+      'Administrator': 'bg-red-100 text-red-800 border-red-200',
+      'Staff': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+      'Speaker': 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      'Delegate': 'bg-gray-100 text-gray-800 border-gray-200',
+    };
+
+    listEl.innerHTML = accounts.map(a => {
+      const avatarBg = avatarColors[a.role] || 'bg-slate-200 text-slate-600';
+      const badgeCls = badgeColors[a.role] || 'bg-gray-100 text-gray-800 border-gray-200';
+      return `
+        <tr class="bg-white hover:bg-slate-50 transition-colors group">
+          <td class="px-6 py-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full ${avatarBg} flex items-center justify-center font-bold uppercase flex-shrink-0 text-sm">${a.initials || '??'}</div>
+              <div>
+                <div class="font-semibold text-slate-900">${a.name || '—'}</div>
+                <div class="text-slate-500 text-xs">${a.email || '—'}</div>
+              </div>
+            </div>
+          </td>
+          <td class="px-6 py-4 text-slate-600 font-medium">${a.org || '—'}</td>
+          <td class="px-6 py-4 text-slate-500 whitespace-nowrap text-sm">${a.date || '—'}</td>
+          <td class="px-6 py-4">
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${badgeCls}">${a.role || '—'}</span>
+          </td>
+          <td class="px-6 py-4 text-right whitespace-nowrap">
+            <button class="btn-edit-role text-blue-600 hover:text-blue-900 font-medium text-sm mr-2" data-docid="${a.id}" data-name="${a.name}" data-role="${a.role}">Edit Role</button>
+            <button class="btn-delete-account text-red-500 hover:text-red-700 font-medium text-sm" data-docid="${a.id}" data-name="${a.name}">Delete</button>
+          </td>
+        </tr>`;
+    }).join('');
+
+    // Update count info
+    const countEl = document.getElementById('accounts-count-info');
+    if (countEl) {
+      countEl.innerHTML = `Showing <span class="font-medium text-slate-900">${accounts.length}</span> of <span class="font-medium text-slate-900">${allAccountsData.length}</span> accounts`;
+    }
+
+    // Bind Edit Role buttons
+    listEl.querySelectorAll('.btn-edit-role').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById('edit-role-docid').value = btn.dataset.docid;
+        document.getElementById('edit-role-username').innerText = `Editing role for: ${btn.dataset.name}`;
+        document.getElementById('edit-role-select').value = btn.dataset.role;
+        document.getElementById('modal-edit-role').classList.remove('hidden');
+      });
+    });
+
+    // Bind Delete buttons
+    listEl.querySelectorAll('.btn-delete-account').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm(`Are you sure you want to delete "${btn.dataset.name}"? This cannot be undone.`)) return;
+        try {
+          await deleteDoc(doc(db, 'accounts', btn.dataset.docid));
+          showToast(`"${btn.dataset.name}" deleted.`, 'success');
+          loadAccounts();
+        } catch(err) {
+          console.error('Delete failed:', err);
+          showToast('Failed to delete account.', 'error');
+        }
+      });
+    });
   }
 
 });

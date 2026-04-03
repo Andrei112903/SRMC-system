@@ -8,7 +8,7 @@ import { signInWithEmailAndPassword, onAuthStateChanged, signOut, createUserWith
 let unsubDocs, unsubStats, unsubSchedule, unsubAccounts;
 
 // 🚀 SYSTEM VERSION MANAGER (Auto-Cache Clear)
-const APP_VERSION = '1.1.0'; // Incremental this whenever you make major changes
+const APP_VERSION = '1.2.1'; // 1.2.1: Hardened filtering & Event Binding
 
 console.log(`SMRC System Version: ${APP_VERSION}`);
 
@@ -34,7 +34,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // Handle Auth State
   onAuthStateChanged(auth, async (user) => {
     if (user) {
-      console.log("User found:", user.email);
+      console.log("User authorized:", user.email);
+      
+      // Hook up Filter/Search inputs (Harden attachment)
+      const searchInput = document.getElementById('accounts-search');
+      const roleFilter = document.getElementById('accounts-filter-role');
+
+      if (searchInput) {
+        searchInput.oninput = () => filterAndRenderAccounts();
+      }
+      if (roleFilter) {
+        roleFilter.onchange = () => filterAndRenderAccounts();
+        roleFilter.oninput = () => filterAndRenderAccounts(); // Safety for mobile
+      }
       
       // Prevent reload loops on MPA legacy paths
       if (window.location.pathname.includes('login.html')) {
@@ -196,12 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Hook up Filter/Search inputs
-  const searchInput = document.getElementById('accounts-search');
-  const roleFilter = document.getElementById('accounts-filter-role');
 
-  if (searchInput) searchInput.addEventListener('input', () => filterAndRenderAccounts());
-  if (roleFilter) roleFilter.addEventListener('change', () => filterAndRenderAccounts());
 
   // --- Router & Navigation ---
   function switchView(target) {

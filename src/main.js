@@ -78,12 +78,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const sidebarAvatar = document.getElementById('sidebar-avatar');
         const headerAvatar = document.getElementById('header-avatar');
         const mobileHeaderAvatar = document.getElementById('mobile-header-avatar');
+        const drawerName = document.getElementById('drawer-user-name');
+        const drawerRole = document.getElementById('drawer-user-role');
+        const drawerAvatar = document.getElementById('drawer-avatar');
         const welcomeMsg = document.getElementById('welcome-msg');
+        
         if(sidebarName) sidebarName.innerText = userName;
         if(sidebarRole) sidebarRole.innerText = userRole;
         if(sidebarAvatar) { sidebarAvatar.innerText = initials; sidebarAvatar.classList.remove('opacity-50'); }
         if(headerAvatar) headerAvatar.innerText = initials;
         if(mobileHeaderAvatar) mobileHeaderAvatar.innerText = initials;
+        if(drawerName) drawerName.innerText = userName;
+        if(drawerRole) drawerRole.innerText = userRole;
+        if(drawerAvatar) drawerAvatar.innerText = initials;
         if(welcomeMsg) welcomeMsg.innerText = `Welcome back, ${userName.split(' ')[0]}. Here's what's happening today.`;
 
         // Section & Tab Visibility based on Role
@@ -602,5 +609,65 @@ document.addEventListener('DOMContentLoaded', () => {
       upBtn.disabled = false; upBtn.innerHTML = `<svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg> Upload Document`;
       upIn.value = '';
     };
+  }
+
+  // --- Mobile Navigation Logic ---
+  const mobileToggle = document.getElementById('btn-mobile-toggle');
+  const mobileClose = document.getElementById('btn-mobile-close');
+  const mobileDrawer = document.getElementById('mobile-drawer');
+  const mobileOverlay = document.getElementById('mobile-drawer-overlay');
+  const appDashboardWrapper = document.getElementById('app-dashboard');
+
+  if (mobileToggle && mobileDrawer && mobileOverlay) {
+    const toggleDrawer = (forceClose = false) => {
+      const isOpen = document.getElementById('app-dashboard').classList.contains('drawer-open');
+      if (isOpen || forceClose) {
+        document.getElementById('app-dashboard').classList.remove('drawer-open');
+        mobileToggle.classList.remove('is-active');
+        mobileOverlay.classList.add('opacity-0');
+        setTimeout(() => {
+          if (!document.getElementById('app-dashboard').classList.contains('drawer-open')) {
+            mobileOverlay.classList.add('hidden');
+          }
+        }, 300);
+      } else {
+        mobileOverlay.classList.remove('hidden');
+        // Force reflow for opacity transition
+        mobileOverlay.offsetHeight;
+        document.getElementById('app-dashboard').classList.add('drawer-open');
+        mobileToggle.classList.add('is-active');
+        mobileOverlay.classList.remove('opacity-0');
+      }
+    };
+
+    mobileToggle.onclick = (e) => {
+      e.stopPropagation();
+      toggleDrawer();
+    };
+
+    if (mobileClose) {
+      mobileClose.onclick = () => toggleDrawer(true);
+    }
+
+    mobileOverlay.onclick = () => toggleDrawer(true);
+
+    // Integrated Drawer Logout
+    const drawerLogoutBtn = document.getElementById('drawer-logout-btn');
+    if (drawerLogoutBtn) {
+      drawerLogoutBtn.onclick = () => {
+        toggleDrawer(true);
+        signOut(auth).then(() => {
+          window.location.reload();
+        });
+      };
+    }
+
+    // Auto-close drawer on navigation click
+    document.querySelectorAll('#mobile-drawer .nav-link, #mobile-drawer a').forEach(link => {
+      link.addEventListener('click', () => {
+        // Delay slightly for visual feedback before closing
+        setTimeout(() => toggleDrawer(true), 150);
+      });
+    });
   }
 });

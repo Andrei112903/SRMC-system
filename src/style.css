@@ -21,4 +21,33 @@
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
   }
+
+  /* Premium Drawer Transitions */
+  .drawer-open #mobile-drawer {
+    transform: translateX(0);
+  }
+  
+  .drawer-open #mobile-drawer-overlay {
+    display: block;
+    opacity: 1;
+  }
+
+  /* Animated Hamburger Icon */
+  .hamburger-line {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: center;
+  }
+
+  .is-active .line-1 {
+    transform: translateY(6px) rotate(45deg);
+  }
+
+  .is-active .line-2 {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+
+  .is-active .line-3 {
+    transform: translateY(-6px) rotate(-45deg);
+  }
 }

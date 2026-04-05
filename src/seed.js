@@ -29,16 +29,6 @@ export async function seedDatabase() {
     }
   }
 
-  const statsSnapshot = await getDocs(collection(db, "stats"));
-  if (statsSnapshot.empty) {
-    const stats = {
-      delegates: 1248,
-      activeSessions: 42,
-      pendingApprovals: 15,
-      docsProcessed: 892
-    };
-    await addDoc(collection(db, "stats"), stats);
-  }
 
   console.log("Seeding database with initial data...");
 

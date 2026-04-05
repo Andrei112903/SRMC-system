@@ -5,7 +5,7 @@ import { signInWithEmailAndPassword, onAuthStateChanged, signOut, createUserWith
 
 // 🚀 REFRESH-FREE LIVE UPDATES
 // (Global unsubscription functions to clean up if needed)
-let unsubDocs, unsubStats, unsubSchedule, unsubAccounts;
+let unsubDocs, unsubSchedule, unsubAccounts;
 
 // 🚀 SYSTEM VERSION MANAGER (Auto-Cache Clear)
 const APP_VERSION = '1.2.1'; // 1.2.1: Hardened filtering & Event Binding
@@ -76,9 +76,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const sidebarName = document.getElementById('sidebar-user-name');
         const sidebarRole = document.getElementById('sidebar-user-role');
         const sidebarAvatar = document.getElementById('sidebar-avatar');
+        const headerAvatar = document.getElementById('header-avatar');
+        const mobileHeaderAvatar = document.getElementById('mobile-header-avatar');
+        const welcomeMsg = document.getElementById('welcome-msg');
         if(sidebarName) sidebarName.innerText = userName;
         if(sidebarRole) sidebarRole.innerText = userRole;
-        if(sidebarAvatar) sidebarAvatar.innerText = initials;
+        if(sidebarAvatar) { sidebarAvatar.innerText = initials; sidebarAvatar.classList.remove('opacity-50'); }
+        if(headerAvatar) headerAvatar.innerText = initials;
+        if(mobileHeaderAvatar) mobileHeaderAvatar.innerText = initials;
+        if(welcomeMsg) welcomeMsg.innerText = `Welcome back, ${userName.split(' ')[0]}. Here's what's happening today.`;
 
         // Section & Tab Visibility based on Role
         const accountsTabDesktop = document.getElementById('nav-accounts-tab');
@@ -128,55 +134,88 @@ document.addEventListener('DOMContentLoaded', () => {
     // 📄 Live Documents
     if (!unsubDocs) {
       unsubDocs = onSnapshot(collection(db, "documents"), (snapshot) => {
+        // --- Dynamic Stat Update ---
+        const totalDocs = snapshot.size;
+        const pendingDocs = snapshot.docs.filter(d => d.data().status === 'Reviewing').length;
+        const docStatEl = document.getElementById('stat-documents');
+        const approvalStatEl = document.getElementById('stat-approvals');
+        if (docStatEl) docStatEl.innerText = totalDocs.toLocaleString();
+        if (approvalStatEl) approvalStatEl.innerText = pendingDocs.toLocaleString();
+
         const listEl = document.getElementById('documents-list');
         if (!listEl) return;
         if (snapshot.empty) {
           listEl.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-slate-500">No documents found.</td></tr>`;
           return;
         }
-        listEl.innerHTML = snapshot.docs.map(docSnap => {
+
+        // --- Arrange Documents Propery (Sort by newest first) ---
+        const sortedDocs = snapshot.docs.sort((a, b) => {
+           const dateA = new Date(a.data().uploadDate);
+           const dateB = new Date(b.data().uploadDate);
+           return dateB - dateA;
+        });
+
+        listEl.innerHTML = sortedDocs.map(docSnap => {
           const data = docSnap.data();
           const docId = docSnap.id;
           let iconColor = data.name?.endsWith('.pdf') ? 'text-red-500' : (data.name?.endsWith('.xlsx') ? 'text-emerald-500' : 'text-blue-500');
-          let statusCls = data.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800';
+          let statusCls = data.status === 'Approved' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-amber-100 text-amber-800 border-amber-200';
           return `
-            <tr class="bg-white hover:bg-slate-50 transition-colors animate-fade-in">
+            <tr class="bg-white hover:bg-slate-50 transition-colors animate-fade-in group">
               <td class="px-6 py-4 font-medium text-slate-900 flex items-center gap-3">
                 <svg class="w-6 h-6 ${iconColor}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                ${data.name}
+                <span class="truncate max-w-[200px]" title="${data.name}">${data.name}</span>
               </td>
-              <td class="px-6 py-4 text-sm">${data.uploadDate}</td>
-              <td class="px-6 py-4 text-sm">${data.size}</td>
-              <td class="px-6 py-4"><span class="px-2.5 py-0.5 rounded-full text-xs font-medium border border-transparent ${statusCls}">${data.status}</span></td>
+              <td class="px-6 py-4 text-sm text-slate-500">${data.uploadDate}</td>
+              <td class="px-6 py-4 text-sm text-slate-500">${data.size}</td>
+              <td class="px-6 py-4">
+                <span class="px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border ${statusCls}">
+                  ${data.status}
+                </span>
+              </td>
               <td class="px-6 py-4 text-right">
-                <div class="flex justify-end gap-3 text-sm">
-                  <button class="text-primary-600 hover:text-primary-900 font-medium">Download</button>
-                  ${window.currentUserRole === 'Administrator' ? `<button class="btn-delete-doc text-red-500 hover:text-red-700 font-medium" data-docid="${docId}" data-name="${data.name}">Delete</button>` : ''}
+                <div class="flex justify-end items-center gap-4">
+                  <button class="btn-download-doc text-slate-400 hover:text-primary-600 transition-colors pt-1" title="Download" data-name="${data.name}">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                  </button>
+                  ${window.currentUserRole === 'Administrator' && data.status !== 'Approved' ? `
+                  <button class="btn-approve-doc text-slate-400 hover:text-emerald-600 transition-colors pt-1" title="Approve" data-docid="${docId}" data-name="${data.name}">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                  </button>` : ''}
+                  ${window.currentUserRole === 'Administrator' ? `
+                  <button class="btn-delete-doc text-slate-400 hover:text-red-500 transition-colors pt-1" title="Delete" data-docid="${docId}" data-name="${data.name}">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                  </button>` : ''}
                 </div>
               </td>
             </tr>`;
         }).join('');
         listEl.querySelectorAll('.btn-delete-doc').forEach(btn => btn.onclick = () => deleteDocument(btn.dataset.docid, btn.dataset.name));
+        listEl.querySelectorAll('.btn-approve-doc').forEach(btn => btn.onclick = () => approveDocument(btn.dataset.docid, btn.dataset.name));
+        listEl.querySelectorAll('.btn-download-doc').forEach(btn => btn.onclick = () => {
+           const name = btn.dataset.name;
+           showToast(`Downloading ${name}...`, 'info');
+           const link = document.createElement('a');
+           link.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(`SMRC Convention System\n\nDocument: ${name}\nStatus: Processed\n\nThis is a simulation-ready placeholder file for your convention system.`));
+           link.setAttribute('download', name + ".txt");
+           link.style.display = 'none';
+           document.body.appendChild(link);
+           link.click();
+           document.body.removeChild(link);
+        });
       });
     }
 
-    // 📊 Live Stats
-    if (!unsubStats) {
-      unsubStats = onSnapshot(collection(db, "stats"), (snapshot) => {
-        if (!snapshot.empty) {
-          const data = snapshot.docs[0].data();
-          const d = document.getElementById('stat-delegates'), s = document.getElementById('stat-sessions'), a = document.getElementById('stat-approvals'), docC = document.getElementById('stat-documents');
-          if (d) d.innerText = (data.delegates || 0).toLocaleString();
-          if (s) s.innerText = (data.activeSessions || 0).toLocaleString();
-          if (a) a.innerText = (data.pendingApprovals || 0).toLocaleString();
-          if (docC) docC.innerText = (data.docsProcessed || 0).toLocaleString();
-        }
-      });
-    }
 
     // 📅 Live Schedule
     if (!unsubSchedule) {
       unsubSchedule = onSnapshot(collection(db, "schedule_events"), (snapshot) => {
+        // --- Dynamic Stat Update ---
+        const activeSessions = snapshot.docs.filter(d => d.data().status === 'Ongoing').length;
+        const sessionStatEl = document.getElementById('stat-sessions');
+        if (sessionStatEl) sessionStatEl.innerText = activeSessions.toLocaleString();
+
         renderSchedule(snapshot);
       });
     }
@@ -185,6 +224,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!unsubAccounts) {
       unsubAccounts = onSnapshot(collection(db, "accounts"), (snapshot) => {
         allAccounts = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        // --- Dynamic Stat Update ---
+        const delegatesCount = allAccounts.filter(a => a.role === 'Delegate').length;
+        const delegateStatEl = document.getElementById('stat-delegates');
+        if (delegateStatEl) delegateStatEl.innerText = delegatesCount.toLocaleString();
+
         filterAndRenderAccounts();
       });
     }
@@ -420,21 +465,27 @@ document.addEventListener('DOMContentLoaded', () => {
   const qaAddSession = document.getElementById('qa-add-session');
   const qaSettings = document.getElementById('qa-settings');
 
-  if (qaExport) qaExport.onclick = () => showToast('Preparing system reports...', 'info');
+  if (qaExport) qaExport.onclick = () => showToast('Feature Coming Soon: PDF Export is being processed.', 'info');
+  if (qaSettings) qaSettings.onclick = () => showToast('Feature Coming Soon: Settings panel is under maintenance.', 'info');
+  
   if (qaNewDelegate) {
     qaNewDelegate.onclick = () => {
       if (inviteModal) {
          inviteForm.reset();
-         document.getElementById('invite-error').classList.add('hidden');
+         const err = document.getElementById('invite-error');
+         if(err) err.classList.add('hidden');
          inviteModal.classList.remove('hidden');
       }
     };
   }
   if (qaAddSession) {
     qaAddSession.onclick = () => {
-      if (sessionModal) {
+      const sessionModal = document.getElementById('modal-add-session');
+      const sessionForm = document.getElementById('form-add-session');
+      if (sessionModal && sessionForm) {
          sessionForm.reset();
-         document.getElementById('session-error').classList.add('hidden');
+         const err = document.getElementById('session-error');
+         if(err) err.classList.add('hidden');
          sessionModal.classList.remove('hidden');
       }
     };
@@ -527,6 +578,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if(confirm(`Delete ${name}?`)) {
        await deleteDoc(doc(db, "documents", id));
        showToast('Document deleted');
+    }
+  }
+
+  async function approveDocument(id, name) {
+    if(confirm(`Approve ${name}?`)) {
+       await updateDoc(doc(db, "documents", id), { status: 'Approved' });
+       showToast(`${name} has been approved!`);
     }
   }
 
